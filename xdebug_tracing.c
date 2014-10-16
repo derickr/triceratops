@@ -26,6 +26,7 @@
 #include "xdebug_trace_textual.h"
 #include "xdebug_trace_computerized.h"
 #include "xdebug_trace_html.h"
+#include "xdebug_trace_wayback.h"
 
 ZEND_EXTERN_MODULE_GLOBALS(xdebug)
 
@@ -37,6 +38,7 @@ xdebug_trace_handler_t *xdebug_select_trace_handler(int options TSRMLS_DC)
 		case 0: tmp = &xdebug_trace_handler_textual; break;
 		case 1: tmp = &xdebug_trace_handler_computerized; break;
 		case 2: tmp = &xdebug_trace_handler_html; break;
+		case 3: tmp = &xdebug_trace_handler_wayback; break;
 	}
 
 	if (options & XDEBUG_TRACE_OPTION_COMPUTERIZED) {
