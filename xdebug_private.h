@@ -133,6 +133,8 @@ typedef struct _xdebug_func {
 	char *function;
 	int   type;
 	int   internal;
+	int   start_lineno;
+	int   end_lineno;
 } xdebug_func;
 
 typedef struct _xdebug_call_entry {
@@ -190,10 +192,6 @@ typedef struct _function_stack_entry {
 
 	/* profiling properties */
 	xdebug_profile profile;
-#if 0
-	double       time_taken;	
-	unsigned int f_calls;
-#endif
 
 	/* misc properties */
 	int          refcount;

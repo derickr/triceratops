@@ -20,10 +20,16 @@
 
 #include "xdebug_tracing.h"
 
+#include <inttypes.h>
+
 typedef struct _xdebug_trace_wayback_context
 {
 	FILE *trace_file;
 	char *trace_filename;
+
+	xdebug_hash *string_table;
+	uint16_t current_string_page_nr;
+	uint16_t current_string_string_nr;
 } xdebug_trace_wayback_context;
 
 extern xdebug_trace_handler_t xdebug_trace_handler_wayback;

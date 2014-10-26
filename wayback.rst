@@ -22,18 +22,27 @@ Frames
 
 	- char: "I"
 	- char: type of function:
-		- 0: include
-		- 1: require
-		- 2: function
-		- 3: method
-		- 4: closure
+	    - value from XFUNC_* in xdebug_private.h
+			- XFUNC_UNKNOWN        0x00
+			- XFUNC_NORMAL         0x01
+			- XFUNC_STATIC_MEMBER  0x02
+			- XFUNC_MEMBER         0x03
+			- XFUNC_INCLUDES       0x10
+			- XFUNC_EVAL           0x10
+			- XFUNC_INCLUDE        0x11
+			- XFUNC_INCLUDE_ONCE   0x12
+			- XFUNC_REQUIRE        0x13
+			- XFUNC_REQUIRE_ONCE   0x14
 	- timeindex: time since start of script
-	- int32: function counter
-	- string_ref: classname
-	- string_ref: function/method name
+	- int32: memory usage
 	- int32: file counter
+	- int32: start line of function source
+	- int32: end line of function source
 	- int32: line number of call location
+	- int32: function counter
 	- int16: number of arguments
+	- string_ref: classname
+	- string_ref: function/method name/closure_ref
 	- argument[]
 
 (O) = Function Exit
@@ -41,8 +50,8 @@ Frames
 
 	- char: "O"
 	- timeindex: time since start of script
+	- int32: memory usage
 	- int32: function counter
-	- int32: line number of return location
 	- argument: return value
 
 (S) = String ref table
@@ -50,7 +59,7 @@ Frames
 
 	- char: "S"
 	- int16: page_nr
-	- string[] (max 2^16 per page)
+	- gzip(string[]) (max 2^16 per page)
 
 ($) = Symbol table
 ------------------
@@ -120,9 +129,11 @@ Types
 
 		- 0: reference
 		- 1: inline
+		- 2: null
 
 	When reference:
 
+	- char: padding
 	- int16: page_nr
 	- int16: string_nr in page
 
@@ -130,7 +141,11 @@ Types
 
 	- <string>: the string
 
-	Inline is used for strings <= 8 bytes, Reference for longer.
+	When null:
+
+	- nothing
+
+	Inline is used for strings <= 16 bytes, Reference for longer.
 
 <timeindex>
 -----------
