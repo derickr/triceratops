@@ -22,9 +22,14 @@
 
 extern ZEND_DECLARE_MODULE_GLOBALS(xdebug);
 
+typedef struct wb_file_index_entry {
+	uint16_t index;
+	char    *filename;
+} wb_file_index_entry;
+
 typedef struct wb_type_string_ref {
-	uint16_t page_nr;
-	uint16_t string_nr;
+	uint32_t index;
+	char    *string;
 } wb_type_string_ref;
 
 typedef struct wb_type_argument {
@@ -59,9 +64,87 @@ typedef struct wb_function_entry {
 	wb_type_argument arguments[]; 
 } wb_function_entry;
 
-static void xdebug_hash_xdfree(void *memory)
+void wb_add_inline_string(xdebug_str *str, char *string, int32_t length TSRMLS_DC);
+
+static void xdebug_hash_string_entry_dtor(void *e)
 {
-	xdfree(memory);
+	wb_type_string_ref *entry = (wb_type_string_ref*) e;
+
+	xdfree(entry->string);
+	xdfree(entry);
+}
+
+static void xdebug_hash_file_entry_dtor(void *e)
+{
+	wb_file_index_entry *entry = (wb_file_index_entry*) e;
+
+	xdfree(entry->filename);
+	xdfree(entry);
+}
+
+void wb_add_padding(xdebug_str *str)
+{
+	int i, j;
+
+	i = (str->l % 16);
+
+	for (j = 0; j < (16 - i); j++) {
+		xdebug_str_addl(str, "X", 1, 0);
+	}
+}
+
+void wb_indexed_string_helper(void *str, xdebug_hash_element *he)
+{
+	wb_type_string_ref *string_index;
+
+	string_index = (wb_type_string_ref*) he->ptr;
+	xdebug_str_addl(str, (char*) &(string_index->index), sizeof(uint32_t), 0);
+	wb_add_inline_string(str, string_index->string, strlen(string_index->string) TSRMLS_CC);
+}
+
+void wb_flush_string_table(xdebug_trace_wayback_context *context TSRMLS_DC)
+{
+	xdebug_str str = {0, 0, NULL};
+	uint16_t nr_of_entries;
+
+	xdebug_str_addl(&str, "$", 1, 0);
+	nr_of_entries = context->string_table->size;
+	xdebug_str_addl(&str, (char*) &nr_of_entries, sizeof nr_of_entries, 0);
+
+	xdebug_hash_apply(context->string_table, (void *) &str, wb_indexed_string_helper);
+
+	wb_add_padding(&str);
+	fwrite(str.d, str.l, 1, context->trace_file);
+	fflush(context->trace_file);
+
+	xdfree(str.d);
+}
+
+void wb_indexed_file_helper(void *str, xdebug_hash_element *he)
+{
+	wb_file_index_entry *file_index;
+
+	file_index = (wb_file_index_entry*) he->ptr;
+	xdebug_str_addl(str, (char*) &(file_index->index), sizeof(uint16_t), 0);
+	wb_add_inline_string(str, file_index->filename, strlen(file_index->filename) TSRMLS_CC);
+}
+
+void wb_flush_file_table(xdebug_trace_wayback_context *context TSRMLS_DC)
+{
+	xdebug_str str = {0, 0, NULL};
+	uint16_t nr_of_entries;
+
+	xdebug_str_addl(&str, "F", 1, 0);
+	nr_of_entries = context->file_table->size;
+	xdebug_str_addl(&str, (char*) &nr_of_entries, sizeof nr_of_entries, 0);
+
+	xdebug_hash_apply(context->file_table, (void *) &str, wb_indexed_file_helper);
+
+	wb_add_padding(&str);
+	fwrite(str.d, str.l, 1, context->trace_file);
+	fflush(context->trace_file);
+
+	xdfree(str.d);
 }
 
 void *xdebug_trace_wayback_init(char *fname, long options TSRMLS_DC)
@@ -73,9 +156,12 @@ void *xdebug_trace_wayback_init(char *fname, long options TSRMLS_DC)
 	tmp_wayback_context->trace_file = xdebug_trace_open_file(fname, options, (char**) &used_fname TSRMLS_CC);
 	tmp_wayback_context->trace_filename = used_fname;
 
-	tmp_wayback_context->string_table = xdebug_hash_alloc(4, (xdebug_hash_dtor) xdebug_hash_xdfree); // FIXME: needs to be 1024
+	tmp_wayback_context->string_table = xdebug_hash_alloc(1024, (xdebug_hash_dtor) xdebug_hash_string_entry_dtor);
 	tmp_wayback_context->current_string_page_nr = 0;
 	tmp_wayback_context->current_string_string_nr = 0;
+
+	tmp_wayback_context->file_table = xdebug_hash_alloc(256, (xdebug_hash_dtor) xdebug_hash_file_entry_dtor);
+	tmp_wayback_context->current_file_nr = 0;
 
 	return tmp_wayback_context;
 }
@@ -84,11 +170,16 @@ void xdebug_trace_wayback_deinit(void *ctxt TSRMLS_DC)
 {
 	xdebug_trace_wayback_context *context = (xdebug_trace_wayback_context*) ctxt;
 
+	wb_flush_string_table(context TSRMLS_DC);
+	wb_flush_file_table(context TSRMLS_DC);
+
 	fclose(context->trace_file);
 	context->trace_file = NULL;
 	xdfree(context->trace_filename);
 
 	xdebug_hash_destroy(context->string_table);
+
+	xdebug_hash_destroy(context->file_table);
 
 	xdfree(context);
 }
@@ -138,19 +229,21 @@ char *xdebug_trace_wayback_get_filename(void *ctxt TSRMLS_DC)
 	return context->trace_filename;
 }
 
-int wb_get_file_nr(xdebug_trace_wayback_context *context, function_stack_entry *fse TSRMLS_DC)
+uint16_t wb_get_file_nr(xdebug_trace_wayback_context *context, function_stack_entry *fse TSRMLS_DC)
 {
-	return 42;
-}
+	wb_file_index_entry *entry;
 
-void wb_add_padding(xdebug_str *str)
-{
-	int i, j;
+	if (xdebug_hash_find(context->file_table, fse->filename, strlen(fse->filename), (void *) &entry)) {
+		return entry->index;
+	} else {
+		wb_file_index_entry *new_entry = xdmalloc(sizeof(wb_file_index_entry));
 
-	i = (str->l % 16);
+		new_entry->index = context->current_file_nr++;
+		new_entry->filename = xdstrdup(fse->filename);
 
-	for (j = 0; j < (16 - i); j++) {
-		xdebug_str_addl(str, "X", 1, 0);
+		xdebug_hash_add(context->file_table, fse->filename, strlen(fse->filename), (void*) new_entry);
+
+		return new_entry->index;
 	}
 }
 
@@ -161,18 +254,22 @@ void wb_create_string_ref(wb_type_string_ref **ref, xdebug_trace_wayback_context
 	} else {
 		*ref = xdmalloc(sizeof(wb_type_string_ref));
 
-		(*ref)->page_nr = context->current_string_page_nr;
-		(*ref)->string_nr = context->current_string_string_nr;
+		(*ref)->index = context->current_string_string_nr;
+		(*ref)->string = xdstrdup(string);
 
 		xdebug_hash_add(context->string_table, string, length, (void*) *ref);
-
-		context->current_string_string_nr++;
-		if (context->current_string_string_nr == 0) { /* overflow of table */
-			wb_flush_string_table(context, context->current_string_page_nr);
-			context->current_string_page_nr++;
-		}
 		return;
 	}
+}
+
+void wb_add_inline_string(xdebug_str *str, char *string, int32_t length TSRMLS_DC)
+{
+	char type = 1;
+
+	xdebug_str_addl(str, (char*) &type, sizeof type, 0);
+	xdebug_str_addl(str, (char*) &length, sizeof length, 0);
+	xdebug_str_addl(str, string, length, 0);
+	xdebug_str_addl(str, "\0", 1, 0);
 }
 
 void wb_add_string_ref(xdebug_str *str, xdebug_trace_wayback_context *context, char *string TSRMLS_DC)
@@ -185,11 +282,7 @@ void wb_add_string_ref(xdebug_str *str, xdebug_trace_wayback_context *context, c
 		length = strlen(string);
 
 		if (length < 16) {
-			type = 1;
-			xdebug_str_addl(str, (char*) &type, sizeof type, 0);
-			xdebug_str_addl(str, (char*) &length, sizeof length, 0);
-			xdebug_str_addl(str, string, length, 0);
-			xdebug_str_addl(str, "\0", 1, 0);
+			wb_add_inline_string(str, string, length);
 		} else {
 			wb_type_string_ref *ref;
 

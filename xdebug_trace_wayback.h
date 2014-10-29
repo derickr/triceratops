@@ -30,6 +30,9 @@ typedef struct _xdebug_trace_wayback_context
 	xdebug_hash *string_table;
 	uint16_t current_string_page_nr;
 	uint16_t current_string_string_nr;
+
+	xdebug_hash *file_table;
+	uint16_t current_file_nr;
 } xdebug_trace_wayback_context;
 
 extern xdebug_trace_handler_t xdebug_trace_handler_wayback;

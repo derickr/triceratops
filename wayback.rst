@@ -70,6 +70,13 @@ Frames
 	- int16: number of entries
 	- argument[]
 
+(F) = File table
+----------------
+
+	- char: "F"
+	- uint16_t: nr_of_entries
+	- indexed_string[]: file names
+
 (M) = Symbol modification
 -------------------------
 
@@ -115,6 +122,14 @@ Types
 
 	**TODO:** Need to check variadics
 
+<indexed_string>
+----------------
+
+	- int32: index
+	- int32: length
+	- char[length]: contents of string
+	- char: \0
+
 <string>
 --------
 
@@ -134,8 +149,7 @@ Types
 	When reference:
 
 	- char: padding
-	- int16: page_nr
-	- int16: string_nr in page
+	- int32: string_nr
 
 	When inline:
 
