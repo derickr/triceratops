@@ -21,6 +21,7 @@
 #include "ext/standard/php_string.h"
 
 extern ZEND_DECLARE_MODULE_GLOBALS(xdebug);
+extern char* xdebug_dbgp_return_source(char *filename, int begin, int end TSRMLS_DC);
 
 typedef struct wb_file_index_entry {
 	uint16_t index;
@@ -229,6 +230,26 @@ char *xdebug_trace_wayback_get_filename(void *ctxt TSRMLS_DC)
 	return context->trace_filename;
 }
 
+void wb_write_file(xdebug_trace_wayback_context *context, uint16_t file_nr, char *filename TSRMLS_DC)
+{
+	char *file_contents;
+	xdebug_str str = {0, 0, NULL};
+	uint16_t length;
+
+	file_contents = xdebug_dbgp_return_source(filename, 0, 99999999 TSRMLS_CC);
+	length = strlen(file_contents);
+
+	xdebug_str_addl(&str, "C", 1, 0);
+	xdebug_str_addl(&str, (char*) &file_nr, sizeof file_nr, 0);
+	wb_add_inline_string(&str, file_contents, length TSRMLS_CC);
+
+	wb_add_padding(&str);
+	fwrite(str.d, str.l, 1, context->trace_file);
+	fflush(context->trace_file);
+
+	xdfree(str.d);
+}
+
 uint16_t wb_get_file_nr(xdebug_trace_wayback_context *context, function_stack_entry *fse TSRMLS_DC)
 {
 	wb_file_index_entry *entry;
@@ -242,6 +263,8 @@ uint16_t wb_get_file_nr(xdebug_trace_wayback_context *context, function_stack_en
 		new_entry->filename = xdstrdup(fse->filename);
 
 		xdebug_hash_add(context->file_table, fse->filename, strlen(fse->filename), (void*) new_entry);
+
+		wb_write_file(context, new_entry->index, fse->filename TSRMLS_CC);
 
 		return new_entry->index;
 	}

@@ -77,6 +77,13 @@ Frames
 	- uint16_t: nr_of_entries
 	- indexed_string[]: file names
 
+(C) = File contents
+-------------------
+
+	- char: "C"
+	- uint16_t: file_nr
+	- string_ref: file_contents
+
 (M) = Symbol modification
 -------------------------
 
