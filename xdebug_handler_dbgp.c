@@ -364,7 +364,7 @@ static char* return_eval_source(char *id, int begin, int end TSRMLS_DC)
 	return NULL;
 }
 
-static char* return_source(char *filename, int begin, int end TSRMLS_DC)
+char* xdebug_dbgp_return_source(char *filename, int begin, int end TSRMLS_DC)
 {
 	if (strncmp(filename, "dbgp://", 7) == 0) {
 		return return_eval_source(filename + 7, begin, end TSRMLS_CC);
@@ -1091,7 +1091,7 @@ DBGP_FUNC(source)
 
 	/* return_source allocates memory for source */
 	XG(breakpoints_allowed) = 0;
-	source = return_source(filename, begin, end TSRMLS_CC);
+	source = xdebug_dbgp_return_source(filename, begin, end TSRMLS_CC);
 	XG(breakpoints_allowed) = 1;
 
 	if (!source) {
