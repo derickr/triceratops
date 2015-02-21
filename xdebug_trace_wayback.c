@@ -254,17 +254,17 @@ uint16_t wb_get_file_nr(xdebug_trace_wayback_context *context, function_stack_en
 {
 	wb_file_index_entry *entry;
 
-	if (xdebug_hash_find(context->file_table, fse->filename, strlen(fse->filename), (void *) &entry)) {
+	if (xdebug_hash_find(context->file_table, fse->op_array->filename, strlen(fse->op_array->filename), (void *) &entry)) {
 		return entry->index;
 	} else {
 		wb_file_index_entry *new_entry = xdmalloc(sizeof(wb_file_index_entry));
 
 		new_entry->index = context->current_file_nr++;
-		new_entry->filename = xdstrdup(fse->filename);
+		new_entry->filename = xdstrdup(fse->op_array->filename);
 
-		xdebug_hash_add(context->file_table, fse->filename, strlen(fse->filename), (void*) new_entry);
+		xdebug_hash_add(context->file_table, fse->op_array->filename, strlen(fse->op_array->filename), (void*) new_entry);
 
-		wb_write_file(context, new_entry->index, fse->filename TSRMLS_CC);
+		wb_write_file(context, new_entry->index, fse->op_array->filename TSRMLS_CC);
 
 		return new_entry->index;
 	}
